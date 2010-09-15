@@ -36,6 +36,7 @@
 #import "AppIconManager.h"
 #import "ReportManager.h"
 #import "AppManager.h"
+#import "NSData+Compression.h"
 
 static BOOL containsOnlyWhiteSpace(NSArray* array) {
 	NSCharacterSet *charSet = [NSCharacterSet whitespaceCharacterSet];
@@ -77,6 +78,21 @@ static BOOL parseDateString(NSString *dateString, int *year, int *month, int *da
 //			fileExtension];
 //}
 
++ (Day *)dayWithData:(NSData *)dayData compressed:(BOOL)compressed {
+	NSString *text = nil;
+	if (compressed) {
+		NSData *uncompressedData = [dayData gzipInflate];
+		text = [[NSString alloc] initWithData:uncompressedData encoding:NSUTF8StringEncoding];
+	} else {
+		text = [[NSString alloc] initWithData:dayData encoding:NSUTF8StringEncoding];
+	}
+	Day *day = [[[Day alloc] initWithCSV:text] autorelease];
+	[text release];
+	return day;
+}
+
+
+
 + (NSDate*) adjustDateToLocalTimeZone:(NSDate *)inDate
 {
     /* All dates should be set to midnight. If set otherwise, they were created in a different time zone.
@@ -116,6 +132,7 @@ static BOOL parseDateString(NSString *dateString, int *year, int *month, int *da
 		return nil; // sanity check
 	}
     
+    const NSUInteger numColumns = [[lines objectAtIndex:0] componentsSeparatedByString:@"\t"].count;
     [lines removeObjectAtIndex:0]; // remove column header
     
 	for (NSString *line in lines) {
@@ -134,7 +151,7 @@ static BOOL parseDateString(NSString *dateString, int *year, int *month, int *da
         NSString *countryString;
         NSString *royaltyCurrency;
 
-		if ([columns count] > 19) {
+		if (numColumns > 19) {
             // old format
             productName = [columns objectAtIndex:6];
             transactionType = [columns objectAtIndex:8];
@@ -146,7 +163,7 @@ static BOOL parseDateString(NSString *dateString, int *year, int *month, int *da
             royaltyCurrency = [columns objectAtIndex:15];
             appId = [columns objectAtIndex:19];
             parentID = (([columns count] >= 26) ? [columns objectAtIndex:26] : nil);
-        } else if ([columns count] == 18 || [columns count] == 19) { // a quick & dirty fix for a dummy tab character
+        } else if (numColumns == 18) {
             // Sept 2010 format
             productName = [columns objectAtIndex:4];
             transactionType = [columns objectAtIndex:6];
@@ -159,7 +176,7 @@ static BOOL parseDateString(NSString *dateString, int *year, int *month, int *da
             appId = [columns objectAtIndex:14];
             parentID = [columns objectAtIndex:17];
         } else {
-            NSLog(@"unknown CSV format: %@ <--- %d columns", line, [columns count]); // show the number of columns for the future reference
+            NSLog(@"unknown CSV format: columns %d - %@", numColumns, line);
             [self release];
             return nil;
         }
